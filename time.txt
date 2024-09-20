@@ -1,1 +1,2 @@
-
+2024-09-20 15:12:08 INFO: scrapy 2.11.2 started
+2024-09-20 15:20:50 INFO: Spider closed
