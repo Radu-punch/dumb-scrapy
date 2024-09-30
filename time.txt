@@ -1,2 +1,5 @@
-2024-09-20 15:12:08 INFO: scrapy 2.11.2 started
-2024-09-20 15:20:50 INFO: Spider closed
+-Exeution of proxy spider : 00:00:40 
+-Execution of form2 spider: 00:08:10
+-Execution of read spider: 00:01:35
+
+-> Total execution time: 00:10:25

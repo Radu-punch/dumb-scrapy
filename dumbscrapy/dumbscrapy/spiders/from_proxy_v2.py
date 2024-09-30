@@ -1,12 +1,25 @@
 import scrapy
 import json
-import random
+import time
 
 
 class FormScrapy(scrapy.Spider):
     name = "form2"
-
     file_path = "./proxy.json"
+
+    def open_spider(self, spider):
+        self.start_time = time.time()
+
+    def close_spider(self, spider):
+        end_time = time.time()
+        elapsed_time = end_time - self.start_time
+
+        # Convert elapsed time to hh:mm:ss format
+        hours, remainder = divmod(elapsed_time, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+
+        self.log(f"Spider execution time: {formatted_time}")
 
     def start_requests(self):
         self.logger.info("Starting")
@@ -34,17 +47,16 @@ class FormScrapy(scrapy.Spider):
             self.logger.info(f"Processing batch: {proxy_list}")
             url = "https://test-rg8.ddns.net/api/get_token"
 
-            delay = random.uniform(1, 5)
-
-            yield scrapy.Request(
+            req = scrapy.Request(
                 url=url,
                 method="GET",
                 callback=self.get_form_token,
                 errback=self.req_error,
                 cb_kwargs={"proxy_list": proxy_list},
                 dont_filter=True,
-                meta={"download_delay": delay},
             )
+
+            yield req
 
     def get_form_token(self, response, proxy_list):
         try:
@@ -59,7 +71,7 @@ class FormScrapy(scrapy.Spider):
                 self.logger.info(
                     f"Extracted form_token: {form_token} for batch: {proxy_list}"
                 )
-                return self.post_request(form_token, proxy_list)
+                yield self.post_request(form_token, proxy_list)
             else:
                 self.logger.error(f"form_token not found for batch: {proxy_list}")
         except Exception as e:
@@ -78,8 +90,7 @@ class FormScrapy(scrapy.Spider):
                 "Content-Type": "application/json",
             }
             cookies = {"form_token": form_token, "x-user_id": "t_b2e64f55"}
-            delay = random.uniform(3, 5)
-            yield scrapy.Request(
+            return scrapy.Request(
                 url=url,
                 method="POST",
                 headers=headers,
@@ -89,7 +100,6 @@ class FormScrapy(scrapy.Spider):
                 cb_kwargs={"proxy_list": proxy_list},
                 errback=self.req_error,
                 dont_filter=True,
-                meta={"download_delay": delay},
             )
         except Exception as e:
             self.logger.error(f"Error in post_request: {e}")
@@ -127,7 +137,6 @@ class FormScrapy(scrapy.Spider):
             self.logger.error(
                 f"Rate limit reached, will retry...{failure.value.response}"
             )
-            # Optionally implement a backoff strategy
             raise scrapy.exceptions.IgnoreRequest()
         else:
             self.logger.error(f"Request error: {failure}")

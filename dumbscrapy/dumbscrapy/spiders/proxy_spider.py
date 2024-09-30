@@ -1,6 +1,7 @@
 from pathlib import Path
 import base64
 import scrapy
+import time
 
 
 class ProxySpider(scrapy.Spider):
@@ -20,6 +21,20 @@ class ProxySpider(scrapy.Spider):
         "proxy-4.html",
         "proxy-5.html",
     ]
+
+    def open_spider(self, spider):
+        self.start_time = time.time()
+
+    def close_spider(self, spider):
+        end_time = time.time()
+        elapsed_time = end_time - self.start_time
+
+        # Convert elapsed time to hh:mm:ss format
+        hours, remainder = divmod(elapsed_time, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+
+        self.log(f"Spider execution time: {formatted_time}")
 
     def start_requests(self):
         for file in self.local_files:
@@ -41,15 +56,14 @@ class ProxySpider(scrapy.Spider):
                 encoded_ip = encoded.split('"')[1]
                 decoded_ip = base64.b64decode(encoded_ip).decode("utf-8")
             port = proxy.css("td:nth-child(2) ::text").get()
-            if port is None:
-                port = 80
             protocl = proxy.css("td:nth-child(3) ::text").get()
 
-            yield {
-                "ip": decoded_ip,
-                "port": port,
-                "protocol": protocl,
-            }
+            if decoded_ip and port:
+                yield {
+                    "ip": decoded_ip,
+                    "port": port,
+                    "protocol": protocl,
+                }
 
 
 class TorCheckSpider(scrapy.Spider):

@@ -3,10 +3,71 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-from scrapy import signals
+from scrapy import signals, Request
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
+import time
+from scrapy.downloadermiddlewares.retry import RetryMiddleware
+
+
+class TooManyRequestsRetryMiddleware(RetryMiddleware):
+    def process_response(self, request, response, spider):
+        if response.status == 429 or response.status == 403:
+            retry_after = response.headers.get("retry-after", None)
+
+            if retry_after:
+                retry_after = int(retry_after)
+                spider.logger.warning(
+                    f"429 error received. Retrying after {retry_after} seconds."
+                )
+                time.sleep(retry_after)
+
+            token_url = "https://test-rg8.ddns.net/api/get_token"
+
+            new_token_request = Request(
+                url=token_url,
+                method="GET",
+                callback=self.retry_with_fresh_token,
+                errback=self.handle_error,
+                cb_kwargs={"original_request": request},
+                meta={"retrying_spider": spider},
+                dont_filter=True,
+            )
+            return new_token_request
+
+        return response
+
+    def retry_with_fresh_token(self, response, original_request):
+        try:
+            cookies = response.headers.getlist("Set-Cookie")
+            form_token = None
+            for cookie in cookies:
+                if b"form_token" in cookie:
+                    form_token = cookie.decode().split(";")[0].split("=")[1]
+                    break
+
+            if form_token:
+                spider = response.meta.get("retrying_spider")
+                spider.logger.info(f"Fetched new form_token: {form_token}")
+
+                original_request.cookies["form_token"] = form_token
+
+                return (
+                    self._retry(original_request, response, spider) or original_request
+                )
+            else:
+                spider = response.meta.get("retrying_spider")
+                spider.logger.error("Unable to fetch form_token during retry")
+                return original_request
+        except Exception as e:
+            spider = response.meta.get("retrying_spider")
+            spider.logger.error(f"Error fetching fresh token: {e}")
+            return original_request
+
+    def handle_error(self, failure):
+        spider = failure.request.meta["spider"]
+        spider.logger.error(f"Error during retry with fresh token: {failure}")
 
 
 class DumbscrapySpiderMiddleware:
